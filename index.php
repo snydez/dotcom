@@ -266,7 +266,7 @@ function parsetemplate($template, $items, $nstart=1, $nend=99)
 				$html = str_replace('{title_post}', $items[$x]['title'] , $html);
 				$html = str_replace('{desc}', $items[$x]['desc'], $html);
 				$html = str_replace('{img_src}', $items[$x]['img'] , $html); 
-				$html = str_replace('http://','https://', $html);s
+				$html = str_replace('http://','https://', $html);
 		
 		
 			
