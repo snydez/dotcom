@@ -1,8 +1,41 @@
 <?php
+// require_once './PHP-Feed.php';
+
+
+function curlsimplexml_load_file($feed) {
+
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_URL, $feed);
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	$output = curl_exec($ch);
+	curl_close($ch);
+
+	return $output;
+}
+
+function curlhttp_get_contents($url)
+{
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_TIMEOUT, 1);
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+  if(FALSE === ($retval = curl_exec($ch))) {
+    error_log(curl_error($ch));
+  } else {
+    return $retval;
+  }
+}
+
 
 function readfeed($url,$type) 
 	{
-		$rss = simplexml_load_file($url);
+		
+		
+		$rssstring = curlhttp_get_contents($url);
+		
+		if(!$rss = simplexml_load_string($rssstring)) error_log("Error load : " . $url);
+		//$rss = Feed::loadAtom($url);
+		
 		
 		$xml[] = '';
 		
@@ -20,6 +53,9 @@ function readfeed($url,$type)
 			case 'atom':
 				$xml = atom($rss);
 				break;	
+			case 'tumblr':
+				$xml = tumblr($rss);
+				break;
 			case 'other':
 				$xml = rssother($rss);
 				break;
@@ -52,6 +88,34 @@ function atom($rss)
 		
 }
 	
+
+function tumblr($rss) 
+	{
+	
+    	$items = [];
+		
+	foreach($rss->channel->item as $item) 
+		{
+			
+			
+			//$img = catch_that_image(htmlspecialchars($item->description));
+
+			$img = catch_that_image((string)htmlspecialchars_decode($item->description));
+			
+			$items[] = [
+				'link' => htmlspecialchars($item->link),
+				'title' => htmlspecialchars($item->title),
+				'img' => $img,
+				'desc' => htmlspecialchars(strip_tags($item->description)),
+
+			];
+			
+			
+		}
+	return $items;
+}
+
+
 function wp_selfhosting($rss) 
 	{
 	
@@ -59,7 +123,7 @@ function wp_selfhosting($rss)
 
     foreach($rss->channel->item as $entry) {
         $image = '';
-        $image = 'N/A';
+        $image = 'https://picsum.photos/500/400?blur=1';
         
         $e_content     = $entry->children("content", true);
 		$e_encoded     = (string)$e_content->encoded;
@@ -129,7 +193,7 @@ function wpcom($rss)
 
     foreach($rss->channel->item as $entry) {
         $image = '';
-        $image = 'N/A';
+        $image = 'https://picsum.photos/500/400?blur=1';
         foreach ($entry->children('media', true) as $k => $v) {
             $attributes = $v->attributes();
 
@@ -173,7 +237,7 @@ function rssother($rss)
 				'link' => htmlspecialchars($item->link),
 				'title' => htmlspecialchars($item->title),
 				'img' => $img,
-				'desc' => strip_tags(htmlspecialchars($item->description)),
+				'desc' => htmlspecialchars(strip_tags($item->description)),
 
 			];
 			
@@ -224,7 +288,7 @@ function getTemplate()
 		}
 	}
 
-function getContent()
+function getContent($clear)
 	{
 
 	// Thanks to https://davidwalsh.name/php-cache-function for cache idea
@@ -233,13 +297,15 @@ function getContent()
 	$current_time = time();
 	$expire_time = 5 * 60;
 	$file_time = filemtime($file);
-	if (file_exists($file) && ($current_time - $expire_time < $file_time))
+	
+	if (file_exists($file) && ($current_time - $expire_time < $file_time)  && $clear!=1 )
 		{
 		return file_get_contents($file);
 		}
 	  else
 		{
 		$content = getFreshContent();
+
 		file_put_contents($file, $content);
 		return $content;
 		}
@@ -251,10 +317,13 @@ function getFreshContent()
 	$html = $template;
 	
 
+
 	// digelasin
 
-	$url = 'http://digelasin.blogspot.com/feeds/posts/default?feed=rss';
+	$url = 'https://digelasin.blogspot.com/feeds/posts/default?feed=rss';
 	$rss = readfeed($url,'blogger');
+	
+	
 	$repeattemplatesmall = '<li> <div class="media wow fadeInDown" style="height: 124px; overflow:hidden"> <a class="media-left" href="{url_post}"><img src = "{img_src}" alt="" ></a> <div class="media-body"> <h4 class="media-heading"><a href="{url_post}" style="text-transform:capitalize;">{title_post}</a></h4> <div class="comments_box"> {desc} </div> </div> </div> </li>';
 	$templatebusiness_cat = parsetemplate($repeattemplatesmall, $rss,1,4);
 	$html =  str_replace('{business_cat}', $templatebusiness_cat, $html);
@@ -269,7 +338,7 @@ function getFreshContent()
 	
 	// ipad2ismine
 	
-	$url = 'http://ipad2ismine.blogspot.com/feeds/posts/default?feed=rss';
+	$url = 'https://ipad2ismine.blogspot.com/feeds/posts/default?feed=rss';
 	$rss = readfeed($url, 'blogger');
 	
 	$templatetech2 = parsetemplate( $repeattemplatesmall, $rss,1,4);
@@ -282,8 +351,9 @@ function getFreshContent()
 	
 	// photoinpicture
 	
-	$url = 'https://photoinpicture.wordpress.com/?feed=rss2'; 
+	$url = 'https://photoinpicture.wordpress.com/feed/'; 
 	$rss = readfeed($url,'wpcom');
+	//$rss = readfeed($url,'atom');
 	$repeattemplate = '<div class="single_iteam"><img src="{img_src}" alt="" style="width:560px; height:auto;"><h2><a class="slider_tittle" href="{url_post}" style="text-transform:capitalize;">{title_post}</a></h2></div>';
 	$templatekanan_atas = parsetemplate($repeattemplate, $rss);
 	$html =  str_replace('{slick_slider}', $templatekanan_atas, $html);
@@ -306,7 +376,7 @@ function getFreshContent()
 	
 	//// robothijau
 	
-	$url = 'http://robothijau.blogspot.com/feeds/posts/default?feed=rss';
+	$url = 'https://robothijau.blogspot.com/feeds/posts/default?feed=rss';
 	$rss = readfeed($url, 'blogger');
 	$repeattemplate = '<li> <div class="catgimg_container" style="max-width: 292px; max-heigth:150px; overflow: hidden;"> <a href="{url_post}" class="catg1_img"><img alt="" src="{img_src}" style="width:292px; height:auto;"></a></div> <h3 class="post_titile"><a href="{url_post}" style="text-transform:capitalize;">{title_post}</a></h3> </li>';
 	$templateslick_slider =  parsetemplate($repeattemplate, $rss,3,5);
@@ -316,12 +386,15 @@ function getFreshContent()
 	
 	$url = 'https://snydez.wordpress.com/feed/';
 	$rss = readfeed($url, 'wpcom');
+	
 	$templatecatg1 = parsetemplate($repeattemplate, $rss,1,3);
 	$html =  str_replace('{catg1_nav_kanan}', $templatecatg1, $html);
 	
 	// jurnal
 	
-	$url = 'https://jurnal.snydez.com/?feed=rss2';
+	$url = 'https://jurnal.snydez.com/feed/';
+	//$rss = readfeed($url, 'wp_selfhosting');
+	//$rss = readfeed($url, 'atom');
 	$rss = readfeed($url, 'wp_selfhosting');
 	$repeattemplate = '<div class="single_featured_slide"> <div style="max-width:567px; max-height:330px; overflow:hidden"><a href="{url_post}"><img src="{img_src}" alt="" style="width:567px; height:auto" ></a></div> <h2><a href="{url_post}" style="text-transform:capitalize;">{title_post}</a></h2> <p>{desc}</p> </div>';
 	$templateslick_slider2 = parsetemplate($repeattemplate, $rss);
@@ -329,7 +402,7 @@ function getFreshContent()
 
 	//// terkap
 	
-	$url = 'http://terkap.blogspot.com/feeds/posts/default?feed=rss';
+	$url = 'https://terkap.blogspot.com/feeds/posts/default?feed=rss';
 	$rss = readfeed($url, 'blogger');
 	$repeattemplatesmall = '<li>'
 							. '<div class="media wow fadeInDown" style="height: 130px; overflow:hidden"> <a href="{url_post}" class="media-left"><img alt="" src="{img_src}"> </a>'
@@ -347,7 +420,7 @@ function getFreshContent()
 	//// tumblr
 	
 	$url = 'https://snydez.tumblr.com/rss';
-	$rss = readfeed($url, 'other');
+	$rss = readfeed($url, 'tumblr');  //-- other
 	$templaterecentpost = parsetemplate($repeattemplatesmall, $rss,1,4);
 	$html =  str_replace('{most_popular}', $templaterecentpost, $html);
 	
@@ -355,7 +428,7 @@ function getFreshContent()
 	//// medium
 	
 	$url = 'https://medium.com/feed/@snydez';
-	$rss = readfeed($url, 'wp_selfhosting');
+	$rss = readfeed($url, 'atom');
 
 	$templaterecentpost = parsetemplate($repeattemplatesmall, $rss,1,4);
 	$html =  str_replace('{recent_comment}', $templaterecentpost, $html);
@@ -363,8 +436,16 @@ function getFreshContent()
 	
 	
 	///// instagram
-	$url = 'https://queryfeed.net/instagram?q=snydez';
-	$rss = readfeed($url, 'atom');
+// udah berbayar ;(
+//	$url = 'https://queryfeed.net/instagram?q=snydez';
+
+// feed no longer working
+	$url = 'https://fetchrss.com/rss/5e1fd4008a93f8a55f8b45675e1fd3d48a93f8345d8b4567.atom';
+	$url = 'https://rss.app/feeds/OZThAKutmgmxRzUp.xml';
+// ---	
+	
+	$url = 'https://rss.app/feeds/C3tJeuxhkIZ19mBO.xml';
+	$rss = readfeed($url, 'wpcom');
 	$repeattemplatebawah = '<li>'
 					. '<div class="media"> <a class="media-left" href="{url_post}"><img src="{img_src}" alt=""></a>'
                     . '<div class="media-body">'
@@ -386,7 +467,7 @@ function getFreshContent()
 	//// ojapuga
 	
 	$url = 'https://ojapuga.tumblr.com/rss';
-	$rss = readfeed($url, 'other');
+	$rss = readfeed($url, 'tumblr');  // -- other
 	
 	$templategamesbawah = parsetemplate($repeattemplatebawah, $rss,1,3);
 	$html =  str_replace('{fashion_bawah}', $templategamesbawah, $html);
@@ -394,19 +475,36 @@ function getFreshContent()
 	$templategamesatas = parsetemplate($repeattemplateatas, $rss,4,5);
 	$html =  str_replace('{fashion_atas}', $templategamesatas, $html);
 	
+	/* RSS penyedian untuk intagram sudah berbayar
 
 	// street instagram
 	
+	// no longer working
 	$url = 'https://queryfeed.net/instagram?q=zedyns';
-	$rss = readfeed($url, 'atom');
+	$url = 'https://rss.app/feeds/qVCYOvz5GgfzTnf6.xml';
+	///---
+	
+	$url = 'https://rss.app/feeds/VGFmRHEZ5L6zE5vC.xml';
+	$rss = readfeed($url, 'wpcom');
 	$repeattemplate = '	<li><a href="{url_post}"><img src="{img_src}" alt=""></a></li>';
 	$parseds = parsetemplate($repeattemplate, $rss, 1, 8);
 	$html = str_replace('{street_instagram}', $parseds, $html);
 		
+	*/
+	
+	// street ini coba diganti dengan stripgenerator
+	
+	$url = 'http://snydez.stripgenerator.com/rss/';
+	
+	$rss = readfeed($url, 'tumblr');
+	$repeattemplate = '<div class="single_featured_slide"> <div style=" max-height:150px; overflow:hidden"><a href="{url_post}"><img src="{img_src}" alt="" style="width:auto; height:150px" ></a></div> <h2><a href="{url_post}" style="text-transform:capitalize;">{title_post}</a></h2> <p>{desc}</p> </div>';
+	$repeattemplate = '	<li><a href="{url_post}"><img src="{img_src}" alt=""></a></li>';
+	$templateslick_slider3 = parsetemplate($repeattemplate, $rss);
+	$html = str_replace('{stripgenerator}', $templateslick_slider3, $html);
 		
 	// snydez blogspot
 	
-	$url = 'http://snydez.blogspot.com/feeds/posts/default?feed=rss';
+	$url = 'https://snydez.blogspot.com/feeds/posts/default?feed=rss';
 	$rss = readfeed($url, 'blogger');
 	$repeattemplate = ' <li><a href="{url_post}">{title_post}</a></li>';
 	$parseds = parsetemplate($repeattemplate, $rss, 1, 7);
@@ -430,7 +528,7 @@ function catch_that_image($desc)
 	$first_img = $matches[1][0];
 	if (empty($first_img))
 		{ //Defines a default image
-		$first_img = "images/390x240x1.jpg";
+		$first_img = "https://picsum.photos/300/150?blur=1&random=" . rand(1,9);
 		}
 
 	return $first_img;
@@ -443,7 +541,7 @@ function GravatarAsFavicon() {
 }
 
 
-print getContent();
+print getContent($_GET['clear']);
 
 ?>
  
